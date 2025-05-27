@@ -5,12 +5,21 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
-import joblib
+import joblib # Keep joblib for potential future use or local saving, but not strictly needed for session_state
+import os     # Keep os for potential future use or local saving, but not strictly needed for session_state
 import time
-from sklearn.preprocessing import StandardScaler
-import os # Ensure os is imported
+
+# --- Initialize session state for model and scaler ---
+# This ensures these keys exist from the start of the session
+if 'trained_model' not in st.session_state:
+    st.session_state.trained_model = None
+if 'trained_scaler' not in st.session_state:
+    st.session_state.trained_scaler = None
+if 'model_features' not in st.session_state:
+    st.session_state.model_features = None # To store column names used for training
 
 # Title and description for the model training page
 st.title("Climate Data Model Training")
@@ -26,11 +35,10 @@ try:
     st.success(f"Successfully loaded data from {climate_data_path}")
 except FileNotFoundError:
     st.error(f"Error: The file '{climate_data_path}' was not found. Please ensure it exists.")
-    st.stop() # Stop the app if data is not found
+    st.stop()
 except Exception as e:
     st.error(f"An error occurred while loading the data: {e}")
     st.stop()
-
 
 # Display initial data overview
 st.subheader("Feature-Engineered Data Overview")
@@ -43,7 +51,7 @@ if missing_values.any():
 
 # Handle missing values: Drop rows with any missing values
 original_rows = climate_data.shape[0]
-climate_data = climate_data.dropna().copy() # Ensure to use .copy()
+climate_data = climate_data.dropna().copy()
 rows_after_dropna = climate_data.shape[0]
 if original_rows > rows_after_dropna:
     st.info(f"Dropped {original_rows - rows_after_dropna} rows with missing values.")
@@ -65,6 +73,8 @@ except KeyError as e:
     st.error(f"Error dropping columns or selecting target: {e}. One of the columns to exclude might not exist after cleaning.")
     st.stop()
 
+# Store feature column names in session state for prediction page consistency
+st.session_state.model_features = X.columns.tolist()
 
 # Check if there are missing values after handling them
 if X.isnull().sum().any():
@@ -85,11 +95,8 @@ except Exception as e:
     st.error(f"Error splitting data: {e}")
     st.stop()
 
-# Apply StandardScaler to standardize the data (important for models like Linear Regression)
-# Initialize scaler here
+# Initialize StandardScaler here
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
 
 # Model selection dropdown
 model_choice = st.selectbox(
@@ -103,13 +110,22 @@ if st.button('Train Model'):
     progress_bar = st.progress(0)
 
     # Simulate loading/progress steps
-    for i in range(50):
+    for i in range(25):
         time.sleep(0.02)
+        progress_bar.progress(i + 1)
+
+    # Fit scaler on training data only
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Continue progress bar for scaler fitting
+    for i in range(25, 50):
+        time.sleep(0.01)
         progress_bar.progress(i + 1)
 
     # Initialize the selected model
     if model_choice == "Random Forest":
-        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1) # Increased n_estimators for better performance
+        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
     elif model_choice == "Gradient Boosting":
         model = GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
     elif model_choice == "Linear Regression":
@@ -122,7 +138,7 @@ if st.button('Train Model'):
         st.success(f"{model_choice} model trained successfully!")
     except Exception as e:
         st.error(f"Error during model training for {model_choice}: {e}")
-        st.stop() # Stop if training fails
+        st.stop()
 
     # Continue progress bar to 100%
     for i in range(50, 100):
@@ -133,7 +149,6 @@ if st.button('Train Model'):
     y_pred = model.predict(X_test_scaled)
 
     # Model evaluation: RMSE and R² score
-    # Corrected the usage of mean_squared_error to get RMSE
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
 
@@ -152,7 +167,7 @@ if st.button('Train Model'):
     ax1.set_ylabel("Predicted Temperature (°C)")
     ax1.legend()
     st.pyplot(fig1)
-    plt.close(fig1) # Close the figure to free up memory
+    plt.close(fig1)
 
     # Feature importances plot (only for Random Forest and Gradient Boosting)
     if model_choice in ["Random Forest", "Gradient Boosting"]:
@@ -167,67 +182,19 @@ if st.button('Train Model'):
             sns.barplot(x='Importance', y='Feature', data=feature_importances, ax=ax2)
             ax2.set_title("Feature Importance")
             st.pyplot(fig2)
-            plt.close(fig2) # Close the figure to free up memory
+            plt.close(fig2)
         else:
             st.info("Feature importances are not available for the selected model type.")
 
-    # --- Start of Enhanced Saving Debugging ---
-    st.subheader("Saving Model and Scaler")
-
-    model_dir = "models"
-    model_path = os.path.join(model_dir, "climate_model.pkl")
-    scaler_path = os.path.join(model_dir, "scaler.pkl")
-
-    st.info(f"Attempting to save model to: `{os.path.abspath(model_path)}`")
-    st.info(f"Attempting to save scaler to: `{os.path.abspath(scaler_path)}`")
-    st.info(f"Current working directory: `{os.getcwd()}`")
-
-    # 1. Create the directory if it doesn't exist
-    if not os.path.exists(model_dir):
-        st.info(f"Directory '{model_dir}' does not exist. Attempting to create it...")
-        try:
-            os.makedirs(model_dir)
-            st.success(f"Directory '{model_dir}' created successfully.")
-        except OSError as e:
-            st.error(f"Error creating directory '{model_dir}': {e}")
-            st.warning("This is often a permissions issue. The app might not have write access to this location.")
-            st.stop() # Stop if directory creation fails, as saving will also fail
-    else:
-        st.info(f"Directory '{model_dir}' already exists.")
-
-    # 2. Save the trained model
-    try:
-        joblib.dump(model, model_path)
-        st.success(f"Trained model saved to {model_path}")
-        # Verify file existence (for local testing)
-        if os.path.exists(model_path):
-            st.info(f"Confirmed: Model file exists at {model_path}")
-        else:
-            st.warning(f"Warning: Model file was reported saved, but could not be verified at {model_path}")
-    except Exception as e:
-        st.error(f"Error saving model to {model_path}: {e}")
-        st.warning("Common causes: permissions, disk full, invalid path.")
-
-    # 3. Save the scaler
-    # Note: `scaler` was already initialized and fitted on X_train above.
-    try:
-        joblib.dump(scaler, scaler_path)
-        st.success(f"Scaler saved to {scaler_path}")
-        # Verify file existence (for local testing)
-        if os.path.exists(scaler_path):
-            st.info(f"Confirmed: Scaler file exists at {scaler_path}")
-        else:
-            st.warning(f"Warning: Scaler file was reported saved, but could not be verified at {scaler_path}")
-    except Exception as e:
-        st.error(f"Error saving scaler to {scaler_path}: {e}")
-        st.warning("Common causes: permissions, disk full, invalid path.")
-
-    # --- End of Enhanced Saving Debugging ---
+    # --- SAVE MODEL AND SCALER TO SESSION STATE ---
+    st.session_state.trained_model = model
+    st.session_state.trained_scaler = scaler
+    st.success("Model and Scaler stored in session state for future use!")
 
     # Display model's performance summary
     st.markdown("""
         The model has been trained on the feature-engineered data.
         We evaluated the model using RMSE and R² score, and visualized the model's performance with
         a scatter plot comparing the true and predicted temperature values.
-        The model and scaler have been saved for future use in predictions.
+        The model and scaler are now available for predictions in this session.
     """)
