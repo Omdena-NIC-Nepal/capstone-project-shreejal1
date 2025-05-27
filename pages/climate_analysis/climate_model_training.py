@@ -11,14 +11,16 @@ import seaborn as sns
 import time
 
 # --- Initialize session state for trained model and scaler ---
+# Ensure these match the keys you initialize in app.py
 if 'climate_model' not in st.session_state:
     st.session_state.climate_model = None
 if 'climate_scaler' not in st.session_state:
     st.session_state.climate_scaler = None
 if 'climate_model_features' not in st.session_state:
-    st.session_state.climate_model_features = None
+    st.session_state.climate_model_features = None # To store column names used for training
 
-# --- NEW: Initialize session state for encoders ---
+# --- NEW: Initialize session state for encoders (CRITICAL) ---
+# These need to be initialized so they always exist in session_state, even if None
 if 'climate_district_encoder' not in st.session_state:
     st.session_state.climate_district_encoder = None
 if 'climate_drought_index_encoder' not in st.session_state:
@@ -46,31 +48,56 @@ def display_model_training():
     st.subheader("Feature-Engineered Data Overview")
     st.write(cleaned_climatedf.head())
 
-    # --- NEW: Handle categorical encoding before defining features ---
+    # --- CRITICAL CHANGE: Handle categorical encoding AND SAVE ENCODERS HERE ---
+    # These encoders MUST be fitted and saved to session state BEFORE any attempt to use them
+    # in the prediction page (e.g., to get .classes_). This ensures they're ready
+    # as soon as the training page is loaded and data is processed, regardless of button click.
+
     # Initialize encoders
     district_encoder = LabelEncoder()
     drought_index_encoder = LabelEncoder()
     heat_stress_encoder = LabelEncoder()
 
-    # Apply encoding if columns exist
-    if 'DISTRICT' in cleaned_climatedf.columns:
-        cleaned_climatedf['DISTRICT_Encoded'] = district_encoder.fit_transform(cleaned_climatedf['DISTRICT'])
-        st.info("Encoded 'DISTRICT' into 'DISTRICT_Encoded'.")
+    # Apply encoding if columns exist and are not empty
+    # It's good practice to fit on the full data before dropping NaNs later for X, y split
+    if 'DISTRICT' in cleaned_climatedf.columns and not cleaned_climatedf['DISTRICT'].empty:
+        # Check for non-numeric data before fitting to avoid issues if 'DISTRICT' somehow became numeric
+        if pd.api.types.is_string_dtype(cleaned_climatedf['DISTRICT']):
+            cleaned_climatedf['DISTRICT_Encoded'] = district_encoder.fit_transform(cleaned_climatedf['DISTRICT'])
+            st.info("Encoded 'DISTRICT' into 'DISTRICT_Encoded'.")
+            st.session_state.climate_district_encoder = district_encoder # <-- SAVE FITTED ENCODER
+        else:
+            st.warning(f"'DISTRICT' column is not of string type ({cleaned_climatedf['DISTRICT'].dtype}). Skipping encoding.")
+            st.session_state.climate_district_encoder = None
     else:
-        st.warning("'DISTRICT' column not found for encoding. Ensure your engineered data contains it.")
+        st.warning("'DISTRICT' column not found or is empty for encoding. Ensure your engineered data contains it. Prediction might be affected if this feature is missing.")
+        st.session_state.climate_district_encoder = None
 
-    if 'Drought Index' in cleaned_climatedf.columns:
-        cleaned_climatedf['Drought_Index_Encoded'] = drought_index_encoder.fit_transform(cleaned_climatedf['Drought Index'])
-        st.info("Encoded 'Drought Index' into 'Drought_Index_Encoded'.")
-    else:
-        st.warning("'Drought Index' column not found for encoding. Ensure your engineered data contains it.")
 
-    if 'Heat Stress Metric' in cleaned_climatedf.columns:
-        cleaned_climatedf['Heat_Stress_Encoded'] = heat_stress_encoder.fit_transform(cleaned_climatedf['Heat Stress Metric'])
-        st.info("Encoded 'Heat Stress Metric' into 'Heat_Stress_Encoded'.")
+    if 'Drought Index' in cleaned_climatedf.columns and not cleaned_climatedf['Drought Index'].empty:
+        if pd.api.types.is_string_dtype(cleaned_climatedf['Drought Index']):
+            cleaned_climatedf['Drought_Index_Encoded'] = drought_index_encoder.fit_transform(cleaned_climatedf['Drought Index'])
+            st.info("Encoded 'Drought Index' into 'Drought_Index_Encoded'.")
+            st.session_state.climate_drought_index_encoder = drought_index_encoder # <-- SAVE FITTED ENCODER
+        else:
+            st.warning(f"'Drought Index' column is not of string type ({cleaned_climatedf['Drought Index'].dtype}). Skipping encoding.")
+            st.session_state.climate_drought_index_encoder = None
     else:
-        st.warning("'Heat Stress Metric' column not found for encoding. Ensure your engineered data contains it.")
-    # --- END NEW: Categorical encoding ---
+        st.warning("'Drought Index' column not found or is empty for encoding. Ensure your engineered data contains it. Prediction might be affected if this feature is missing.")
+        st.session_state.climate_drought_index_encoder = None
+
+    if 'Heat Stress Metric' in cleaned_climatedf.columns and not cleaned_climatedf['Heat Stress Metric'].empty:
+        if pd.api.types.is_string_dtype(cleaned_climatedf['Heat Stress Metric']):
+            cleaned_climatedf['Heat_Stress_Encoded'] = heat_stress_encoder.fit_transform(cleaned_climatedf['Heat Stress Metric'])
+            st.info("Encoded 'Heat Stress Metric' into 'Heat_Stress_Encoded'.")
+            st.session_state.climate_heat_stress_encoder = heat_stress_encoder # <-- SAVE FITTED ENCODER
+        else:
+            st.warning(f"'Heat Stress Metric' column is not of string type ({cleaned_climatedf['Heat Stress Metric'].dtype}). Skipping encoding.")
+            st.session_state.climate_heat_stress_encoder = None
+    else:
+        st.warning("'Heat Stress Metric' column not found or is empty for encoding. Ensure your engineered data contains it. Prediction might be affected if this feature is missing.")
+        st.session_state.climate_heat_stress_encoder = None
+    # --- END CRITICAL CHANGE ---
 
 
     # Define feature columns and target columns
@@ -79,21 +106,21 @@ def display_model_training():
         return
 
     # Dynamically determine feature columns
-    # Adjust this list based on what your FE process actually outputs
-    # and what you want to use as features.
-    cols_to_exclude_from_features = ['DATE', 'T2M', 'DISTRICT', 'Drought Index', 'Heat Stress Metric'] # Exclude original categorical columns
+    # Exclude original categorical columns and the target
+    cols_to_exclude_from_features = ['DATE', 'T2M', 'DISTRICT', 'Drought Index', 'Heat Stress Metric']
 
     # Filter out columns that don't exist in the DataFrame
     existing_cols_to_exclude = [col for col in cols_to_exclude_from_features if col in cleaned_climatedf.columns]
     
-    # Feature columns will now include the newly encoded columns
-    feature_cols = [col for col in cleaned_climatedf.columns if col not in existing_cols_to_exclude and cleaned_climatedf[col].dtype in ['float64', 'int64']]
+    # Feature columns will now include the newly encoded numerical columns and other numericals
+    feature_cols = [col for col in cleaned_climatedf.columns if col not in existing_cols_to_exclude and pd.api.types.is_numeric_dtype(cleaned_climatedf[col])]
+
 
     target_col = 'T2M' # Your target variable
 
     # Check if we have features left
     if not feature_cols:
-        st.error("❌ No feature columns found after exclusion. Cannot train model.")
+        st.error("❌ No valid numerical feature columns found after exclusion and encoding. Cannot train model.")
         st.info(f"DataFrame columns: {cleaned_climatedf.columns.tolist()}")
         st.info(f"Columns excluded: {existing_cols_to_exclude}")
         return
@@ -180,16 +207,11 @@ def display_model_training():
                     st.write(f"**RMSE:** {rmse:.4f}")
                     st.write(f"**MAE:** {mae:.4f}")
 
-                # --- Save the trained model, scaler, AND ENCODERS in session state ---
+                # --- Save the trained model and scaler in session state ---
+                # Encoders are already saved above when they are fitted.
                 st.session_state.climate_model = model
                 st.session_state.climate_scaler = scaler # Save the fitted scaler
-                # --- NEW: Save fitted encoders ---
-                st.session_state.climate_district_encoder = district_encoder
-                st.session_state.climate_drought_index_encoder = drought_index_encoder
-                st.session_state.climate_heat_stress_encoder = heat_stress_encoder
-                # --- END NEW ---
-
-                st.success("Model, Scaler, and Encoders stored in session state for future use!")
+                st.success("Model and Scaler stored in session state for future use!")
 
                 # Plot Actual vs Predicted
                 st.subheader("Actual vs Predicted Values")
@@ -237,7 +259,7 @@ def display_model_training():
 
             except Exception as e:
                 st.error(f"An error occurred during model training or evaluation: {e}")
-                st.exception(e)
+                st.exception(e) # Display full traceback for debugging
     else:
         st.info("Make sure to select a model and click 'Train Model' to begin training.")
 
@@ -248,13 +270,14 @@ if __name__ == "__main__":
         st.warning("Running Model Training page directly. No engineered data in session state. Attempting to load dummy data.")
         try:
             dummy_data = pd.DataFrame({
-                'DATE': pd.to_datetime(['2000-01-01'] * 50 + ['2000-02-01'] * 50),
-                'T2M': np.random.rand(100) * 10 + 20, # Example target
-                'DISTRICT': np.random.choice(['Kathmandu', 'Pokhara'], 100),
-                'Drought Index': np.random.choice(['Low', 'Medium', 'High'], 100),
-                'Heat Stress Metric': np.random.choice(['Mild', 'Severe'], 100),
-                'Precipitation': np.random.rand(100) * 100,
-                'TemperatureAnomaly': np.random.randn(100),
+                'DATE': pd.to_datetime(['2000-01-01'] * 50 + ['2000-02-01'] * 50 + ['2000-03-01'] * 50), # 150 rows
+                'T2M': np.random.rand(150) * 10 + 20, # Example target
+                'DISTRICT': np.random.choice(['Kathmandu', 'Pokhara', 'Chitwan'], 150),
+                'Drought Index': np.random.choice(['Low', 'Moderate', 'High'], 150),
+                'Heat Stress Metric': np.random.choice(['Mild', 'Severe', 'Extreme'], 150),
+                'Precipitation': np.random.rand(150) * 100,
+                'TemperatureAnomaly': np.random.randn(150),
+                'YEAR': pd.to_datetime(['2000-01-01'] * 50 + ['2000-02-01'] * 50 + ['2000-03-01'] * 50).dt.year, # Add 'YEAR'
                 # Add other dummy features that you expect from your FE
             })
             st.session_state.engineered_climate_data = dummy_data
