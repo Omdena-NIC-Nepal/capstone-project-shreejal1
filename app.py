@@ -1,12 +1,13 @@
 import streamlit as st
-import pandas as pd # Import pandas if your session state initializations use it
+import pandas as pd
 
 # --- Import your climate analysis page scripts as modules ---
 from pages.climate_analysis import climate_overview, climate_eda, climate_feature_engineering, climate_model_training, climate_prediction
 
 # --- Import your agriculture analysis page scripts as modules ---
-# ADD THESE LINES:
-from pages.agriculture_analysis import agri_overview, agri_eda, agri_feature_engineering, agri_model_training, agri_prediction
+# UPDATED IMPORTS:
+from pages.agriculture_analysis import agriculture_overview, agriculture_eda, \
+    agriculture_feature_engineering, agriculture_model_training, agriculture_prediction
 
 
 # Configure page settings
@@ -60,11 +61,11 @@ page_functions = {
         "Prediction": climate_prediction.display_prediction
     },
     "Agriculture Analysis": {
-        "Overview": agri_overview.display,
-        "EDA": agri_eda.display,
-        "Feature Engineering": agri_feature_engineering.display, # Assuming these agri pages use a 'display' function
-        "Model Training": agri_model_training.display,           # Adjust if they use different names like 'display_agri_training'
-        "Prediction": agri_prediction.display
+        "Overview": agriculture_overview.display, # UPDATED
+        "EDA": agriculture_eda.display,           # UPDATED
+        "Feature Engineering": agriculture_feature_engineering.display, # UPDATED
+        "Model Training": agriculture_model_training.display,           # UPDATED
+        "Prediction": agriculture_prediction.display                    # UPDATED
     }
 }
 
