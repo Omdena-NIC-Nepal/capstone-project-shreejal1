@@ -1,17 +1,19 @@
 import streamlit as st
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
 import time
 
 # Title and description for the model training page
 st.title("Climate Data Model Training")
 st.markdown("""
-    In this section, we will train a machine learning model to predict the temperature (T2M) based on the 
-    engineered climate data. We'll evaluate the model performance and visualize the results.
+    In this section, you can choose a machine learning model to train on the feature-engineered climate data.
+    We support Random Forest, Gradient Boosting, and Linear Regression.
 """)
 
 # Load the feature-engineered climate data
@@ -29,14 +31,25 @@ y = climate_data['T2M']
 # Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+# Model selection dropdown
+model_choice = st.selectbox(
+    "Choose the model you want to train:",
+    options=["Random Forest", "Gradient Boosting", "Linear Regression"]
+)
+
 # Add a button to start training the model
 if st.button('Train Model'):
     # Create a progress bar
     progress_bar = st.progress(0)
-    
-    # Initialize and train the model
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    
+
+    # Initialize the selected model
+    if model_choice == "Random Forest":
+        model = RandomForestRegressor(n_estimators=10, max_depth=10, random_state=42, n_jobs=-1)
+    elif model_choice == "Gradient Boosting":
+        model = GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
+    elif model_choice == "Linear Regression":
+        model = LinearRegression()
+
     # Start training and update progress bar
     for i in range(100):
         model.fit(X_train, y_train)
@@ -66,21 +79,34 @@ if st.button('Train Model'):
     plt.legend()
     st.pyplot(plt)
 
-    # Feature importances plot
-    st.subheader("Feature Importances")
-    feature_importances = pd.DataFrame({
-        'Feature': X.columns,
-        'Importance': model.feature_importances_
-    }).sort_values(by='Importance', ascending=False)
+    # Feature importances plot (only for Random Forest and Gradient Boosting)
+    if model_choice in ["Random Forest", "Gradient Boosting"]:
+        st.subheader("Feature Importances")
+        feature_importances = pd.DataFrame({
+            'Feature': X.columns,
+            'Importance': model.feature_importances_
+        }).sort_values(by='Importance', ascending=False)
 
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x='Importance', y='Feature', data=feature_importances)
-    plt.title("Feature Importance")
-    st.pyplot(plt)
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='Importance', y='Feature', data=feature_importances)
+        plt.title("Feature Importance")
+        st.pyplot(plt)
+
+    # Save the trained model and scaler
+    model_path = "models/climate_model.pkl"
+    scaler_path = "models/scaler.pkl"
+
+    # Save the trained model using joblib
+    joblib.dump(model, model_path)
+    # Save the scaler
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    joblib.dump(scaler, scaler_path)
 
     # Display model's performance summary
     st.markdown("""
-        The Random Forest Regressor model has been trained on the feature-engineered data. 
+        The model has been trained on the feature-engineered data. 
         We evaluated the model using RMSE and R² score, and visualized the model's performance with 
-        a scatter plot comparing the true and predicted temperature values.
+        a scatter plot comparing the true and predicted temperature values. 
+        The model and scaler have been saved for future use in predictions.
     """)
