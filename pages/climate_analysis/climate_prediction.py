@@ -59,4 +59,3 @@ def display():
 
         st.success(f"📈 Predictions for {selected_month_name} {selected_year} in {selected_district}:")
         st.dataframe(result)
-        st.balloons()

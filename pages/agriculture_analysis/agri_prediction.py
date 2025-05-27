@@ -45,4 +45,3 @@ def display():
     st.success("✅ Prediction successful!")
     st.write("### 📈 Predicted Value")
     st.write(f"📌 {float(prediction[0]):.2f}")
-    st.balloons()

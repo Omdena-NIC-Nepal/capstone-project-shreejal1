@@ -70,7 +70,6 @@ def display():
 
         st.progress(100, text="✅ Training Complete!")
         st.success(f"✅ Model Trained Successfully!")
-        st.balloons()
 
         # Display Model Evaluation Metrics
         st.subheader("📊 Model Evaluation Metrics")
