@@ -107,6 +107,7 @@ if st.button('Train Model'):
     joblib.dump(model, model_path)
 
     # Save the scaler
+    from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     joblib.dump(scaler, scaler_path)
