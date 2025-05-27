@@ -121,15 +121,30 @@ if st.button('Train Model'):
         plt.title("Feature Importance")
         st.pyplot(plt)
 
-    # Save the trained model and scaler
-    model_path = "models/climate_model.pkl"
-    scaler_path = "models/scaler.pkl"
+        # Save the trained model and scaler
+    model_dir = "models"
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
 
-    # Save the trained model using joblib
-    joblib.dump(model, model_path)
+    model_path = os.path.join(model_dir, "climate_model.pkl")
+    scaler_path = os.path.join(model_dir, "scaler.pkl")
 
-    # Save the scaler
-    joblib.dump(scaler, scaler_path)
+    # Save the trained model
+    try:
+        joblib.dump(model, model_path)
+        st.success(f"Trained model saved to {model_path}")
+    except Exception as e:
+        st.error(f"Error saving model: {e}")
+
+    # Initialize and save the scaler
+    scaler = StandardScaler()  # Define scaler here (outside try block)
+
+    try:
+        scaler.fit(X_train)  # Fit on training data only
+        joblib.dump(scaler, scaler_path)
+        st.success(f"Scaler saved to {scaler_path}")
+    except Exception as e:
+        st.error(f"Error saving scaler: {e}")
 
     # Display model's performance summary
     st.markdown("""
