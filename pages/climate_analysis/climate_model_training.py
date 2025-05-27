@@ -2,27 +2,33 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import LinearRegression, Ridge # Added Ridge Regression as in the reference
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error # Added MAE as in the reference
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder # Make sure LabelEncoder is imported
 import matplotlib.pyplot as plt
 import seaborn as sns
-# import joblib # Not strictly needed if only using session_state for model persistence
-# import os     # Not strictly needed if only using session_state for model persistence
 import time
 
 # --- Initialize session state for trained model and scaler ---
-# Ensure these match the keys you initialize in app.py
 if 'climate_model' not in st.session_state:
     st.session_state.climate_model = None
 if 'climate_scaler' not in st.session_state:
     st.session_state.climate_scaler = None
 if 'climate_model_features' not in st.session_state:
-    st.session_state.climate_model_features = None # To store column names used for training
+    st.session_state.climate_model_features = None
+
+# --- NEW: Initialize session state for encoders ---
+if 'climate_district_encoder' not in st.session_state:
+    st.session_state.climate_district_encoder = None
+if 'climate_drought_index_encoder' not in st.session_state:
+    st.session_state.climate_drought_index_encoder = None
+if 'climate_heat_stress_encoder' not in st.session_state:
+    st.session_state.climate_heat_stress_encoder = None
+
 
 # The main function for this page
-def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATCHES app.py
+def display_model_training():
     st.title("Climate Data Model Training")
     st.markdown("""
         In this section, you can choose a machine learning model to train on the feature-engineered climate data.
@@ -40,23 +46,48 @@ def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATC
     st.subheader("Feature-Engineered Data Overview")
     st.write(cleaned_climatedf.head())
 
+    # --- NEW: Handle categorical encoding before defining features ---
+    # Initialize encoders
+    district_encoder = LabelEncoder()
+    drought_index_encoder = LabelEncoder()
+    heat_stress_encoder = LabelEncoder()
+
+    # Apply encoding if columns exist
+    if 'DISTRICT' in cleaned_climatedf.columns:
+        cleaned_climatedf['DISTRICT_Encoded'] = district_encoder.fit_transform(cleaned_climatedf['DISTRICT'])
+        st.info("Encoded 'DISTRICT' into 'DISTRICT_Encoded'.")
+    else:
+        st.warning("'DISTRICT' column not found for encoding. Ensure your engineered data contains it.")
+
+    if 'Drought Index' in cleaned_climatedf.columns:
+        cleaned_climatedf['Drought_Index_Encoded'] = drought_index_encoder.fit_transform(cleaned_climatedf['Drought Index'])
+        st.info("Encoded 'Drought Index' into 'Drought_Index_Encoded'.")
+    else:
+        st.warning("'Drought Index' column not found for encoding. Ensure your engineered data contains it.")
+
+    if 'Heat Stress Metric' in cleaned_climatedf.columns:
+        cleaned_climatedf['Heat_Stress_Encoded'] = heat_stress_encoder.fit_transform(cleaned_climatedf['Heat Stress Metric'])
+        st.info("Encoded 'Heat Stress Metric' into 'Heat_Stress_Encoded'.")
+    else:
+        st.warning("'Heat Stress Metric' column not found for encoding. Ensure your engineered data contains it.")
+    # --- END NEW: Categorical encoding ---
+
 
     # Define feature columns and target columns
-    # Adjust these based on what was in your engineered_climate_data after FE
-    # Ensure 'T2M' is available as the target
     if 'T2M' not in cleaned_climatedf.columns:
         st.error("❌ Target column 'T2M' not found in the engineered data. Cannot train model.")
         return
 
-    # Dynamically determine feature columns by excluding target and ID/time columns
+    # Dynamically determine feature columns
     # Adjust this list based on what your FE process actually outputs
     # and what you want to use as features.
-    # Exclude columns that are definitely not features:
-    cols_to_exclude_from_features = ['DATE', 'T2M'] # Assuming 'DATE' was kept, and 'T2M' is target
+    cols_to_exclude_from_features = ['DATE', 'T2M', 'DISTRICT', 'Drought Index', 'Heat Stress Metric'] # Exclude original categorical columns
 
     # Filter out columns that don't exist in the DataFrame
     existing_cols_to_exclude = [col for col in cols_to_exclude_from_features if col in cleaned_climatedf.columns]
-    feature_cols = [col for col in cleaned_climatedf.columns if col not in existing_cols_to_exclude]
+    
+    # Feature columns will now include the newly encoded columns
+    feature_cols = [col for col in cleaned_climatedf.columns if col not in existing_cols_to_exclude and cleaned_climatedf[col].dtype in ['float64', 'int64']]
 
     target_col = 'T2M' # Your target variable
 
@@ -110,10 +141,8 @@ def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATC
                 X_test_scaled = scaler.transform(X_test)
 
                 # Convert scaled arrays back to DataFrame to preserve column names for model (if needed by some models)
-                # Or keep as numpy arrays if model accepts
                 X_train_scaled_df = pd.DataFrame(X_train_scaled, columns=X.columns, index=X_train.index)
                 X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=X.columns, index=X_test.index)
-
 
                 # Initialize the selected model
                 if model_choice == "Random Forest":
@@ -126,11 +155,11 @@ def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATC
                     model = Ridge(alpha=1.0) # You can add a slider for alpha if desired
 
                 st.info(f"Starting training for {model_choice} model...")
-                model.fit(X_train_scaled_df, y_train) # Train with DataFrame if preferred
+                model.fit(X_train_scaled_df, y_train)
                 st.success(f"{model_choice} model trained successfully!")
 
                 # Make predictions
-                y_pred = model.predict(X_test_scaled_df) # Predict with DataFrame if preferred
+                y_pred = model.predict(X_test_scaled_df)
 
                 # Model Evaluation
                 r2 = r2_score(y_test, y_pred)
@@ -151,10 +180,16 @@ def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATC
                     st.write(f"**RMSE:** {rmse:.4f}")
                     st.write(f"**MAE:** {mae:.4f}")
 
-                # --- Save the trained model and scaler in session state ---
+                # --- Save the trained model, scaler, AND ENCODERS in session state ---
                 st.session_state.climate_model = model
                 st.session_state.climate_scaler = scaler # Save the fitted scaler
-                st.success("Model and Scaler stored in session state for future use!")
+                # --- NEW: Save fitted encoders ---
+                st.session_state.climate_district_encoder = district_encoder
+                st.session_state.climate_drought_index_encoder = drought_index_encoder
+                st.session_state.climate_heat_stress_encoder = heat_stress_encoder
+                # --- END NEW ---
+
+                st.success("Model, Scaler, and Encoders stored in session state for future use!")
 
                 # Plot Actual vs Predicted
                 st.subheader("Actual vs Predicted Values")
@@ -192,7 +227,7 @@ def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATC
                         fig3, ax3 = plt.subplots(figsize=(10, 6))
                         sns.barplot(x='Importance', y='Feature', data=feature_importances, ax=ax3)
                         ax3.set_title("Feature Importance")
-                        plt.tight_layout() # Adjust layout for potentially long labels
+                        plt.tight_layout()
                         st.pyplot(fig3)
                         plt.close(fig3)
                     else:
@@ -202,28 +237,39 @@ def display_model_training(): # <--- THIS IS THE FUNCTION NAME TO ENSURE IT MATC
 
             except Exception as e:
                 st.error(f"An error occurred during model training or evaluation: {e}")
-                st.exception(e) # Display full traceback for debugging
+                st.exception(e)
     else:
         st.info("Make sure to select a model and click 'Train Model' to begin training.")
 
 # This block is only executed when the script is run directly (for testing purposes)
 if __name__ == "__main__":
     # Simulate session state for local testing if needed
-    # For this page to run directly, it needs 'engineered_climate_data' in session state.
-    # You might need to load dummy data or run the FE page first in your main app.
     if 'engineered_climate_data' not in st.session_state:
         st.warning("Running Model Training page directly. No engineered data in session state. Attempting to load dummy data.")
         try:
-            # Create some dummy data or load from a known path for testing
-            # Ensure this dummy data structure matches what your FE page would produce
-            dummy_data = pd.DataFrame(np.random.rand(100, 10), columns=[f'feature_{i}' for i in range(8)] + ['T2M', 'DATE'])
-            dummy_data['DISTRICT'] = np.random.choice(['A', 'B'], 100)
-            dummy_data['YEAR'] = np.random.randint(2000, 2020, 100)
-            dummy_data['MONTH'] = np.random.randint(1, 13, 100)
+            dummy_data = pd.DataFrame({
+                'DATE': pd.to_datetime(['2000-01-01'] * 50 + ['2000-02-01'] * 50),
+                'T2M': np.random.rand(100) * 10 + 20, # Example target
+                'DISTRICT': np.random.choice(['Kathmandu', 'Pokhara'], 100),
+                'Drought Index': np.random.choice(['Low', 'Medium', 'High'], 100),
+                'Heat Stress Metric': np.random.choice(['Mild', 'Severe'], 100),
+                'Precipitation': np.random.rand(100) * 100,
+                'TemperatureAnomaly': np.random.randn(100),
+                # Add other dummy features that you expect from your FE
+            })
             st.session_state.engineered_climate_data = dummy_data
             st.info("Dummy engineered data loaded for direct testing.")
         except Exception as e:
             st.error(f"Could not load/create dummy data for direct testing: {e}")
-            st.session_state.engineered_climate_data = None # Ensure it's None if creation failed
+            st.session_state.engineered_climate_data = None
 
-    display_model_training()
+    # Explicitly set model, scaler, and features to None if not present for clean test runs
+    # This also applies to the NEW encoders
+    if 'climate_model' not in st.session_state: st.session_state.climate_model = None
+    if 'climate_scaler' not in st.session_state: st.session_state.climate_scaler = None
+    if 'climate_model_features' not in st.session_state: st.session_state.climate_model_features = None
+    if 'climate_district_encoder' not in st.session_state: st.session_state.climate_district_encoder = None
+    if 'climate_drought_index_encoder' not in st.session_state: st.session_state.climate_drought_index_encoder = None
+    if 'climate_heat_stress_encoder' not in st.session_state: st.session_state.climate_heat_stress_encoder = None
+
+    display_model_training() # Ensure this matches the function name in app.py
