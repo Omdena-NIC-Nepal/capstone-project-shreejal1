@@ -4,7 +4,7 @@ import pandas as pd # Import pandas if your session state initializations use it
 # --- Import your page scripts as modules ---
 # Assuming your pages are in a 'pages/climate_analysis/' and 'pages/agriculture_analysis/' structure
 from pages.climate_analysis import climate_overview, climate_eda, climate_feature_engineering, climate_model_training, climate_prediction
-from pages.agriculture_analysis import agri_overview, agri_eda, agri_feature_engineering, agri_model_training, agri_prediction
+# from pages.agriculture_analysis import agri_overview, agri_eda, agri_feature_engineering, agri_model_training, agri_prediction
 
 # Configure page settings
 st.set_page_config(layout="wide", page_title="Climate Change Impact Assessment and Prediction System for Nepal")
