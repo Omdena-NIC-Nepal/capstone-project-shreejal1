@@ -10,6 +10,7 @@ import seaborn as sns
 import joblib
 import time
 from sklearn.preprocessing import StandardScaler
+import os
 
 # Title and description for the model training page
 st.title("Climate Data Model Training")
