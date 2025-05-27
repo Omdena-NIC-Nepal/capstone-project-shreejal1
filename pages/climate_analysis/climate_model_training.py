@@ -42,19 +42,27 @@ if st.button('Train Model'):
     # Create a progress bar
     progress_bar = st.progress(0)
 
+    # Simulate loading/progress steps
+    for i in range(50):
+        time.sleep(0.02)
+        progress_bar.progress(i + 1)
+
     # Initialize the selected model
     if model_choice == "Random Forest":
-        model = RandomForestRegressor(n_estimators=10, max_depth=10, random_state=42, n_jobs=-1)
+        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
     elif model_choice == "Gradient Boosting":
         model = GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
     elif model_choice == "Linear Regression":
         model = LinearRegression()
 
-    # Start training and update progress bar
-    for i in range(100):
-        model.fit(X_train, y_train)
+    # Actual model training
+    model.fit(X_train, y_train)
+
+    # Continue progress bar to 100%
+    for i in range(50, 100):
+        time.sleep(0.01)
         progress_bar.progress(i + 1)
-        time.sleep(0.1)  # Simulate time delay (can be removed for actual training)
+
 
     # Make predictions after training
     y_pred = model.predict(X_test)
