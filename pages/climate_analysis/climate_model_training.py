@@ -47,6 +47,11 @@ else:
 # Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+# Apply StandardScaler to standardize the data (important for models like Linear Regression)
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
 # Model selection dropdown
 model_choice = st.selectbox(
     "Choose the model you want to train:",
@@ -72,7 +77,7 @@ if st.button('Train Model'):
         model = LinearRegression()
 
     # Actual model training (fitting the model)
-    model.fit(X_train, y_train)
+    model.fit(X_train_scaled, y_train)
 
     # Continue progress bar to 100%
     for i in range(50, 100):
@@ -80,7 +85,7 @@ if st.button('Train Model'):
         progress_bar.progress(i + 1)
 
     # Make predictions after training
-    y_pred = model.predict(X_test)
+    y_pred = model.predict(X_test_scaled)
 
     # Model evaluation: RMSE and R² score
     # Fix: Correct usage of mean_squared_error with squared=False for RMSE
@@ -124,8 +129,6 @@ if st.button('Train Model'):
     joblib.dump(model, model_path)
 
     # Save the scaler
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
     joblib.dump(scaler, scaler_path)
 
     # Display model's performance summary
