@@ -1,170 +1,189 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-# No need to import RandomForestRegressor, StandardScaler here if loading from joblib/session_state
-import joblib # Keep joblib for local saving if needed, but not for session_state
-import os     # Keep os for local saving if needed, but not for session_state
 
-# Title and description for the prediction page
-st.title("Climate Data Prediction")
-st.markdown("""
-    In this section, we will generate predictions based on the trained model. You can input new data
-    (such as temperature, precipitation, etc.) and predict the temperature (T2M) using the trained model.
-""")
+# No need to import RandomForestRegressor, StandardScaler etc. here
+# as we will load them from session_state as objects
 
-# --- Load model and scaler from session state ---
-model = None
-scaler = None
-model_features = None
+def display_prediction(): # <--- THIS MUST BE THE FUNCTION NAME
+    st.title("Climate Data Prediction")
+    st.markdown("""
+        Use this section to make predictions based on the trained climate model.
+        You can input new climate conditions, and the model will predict the 'T2M' (Temperature at 2 meters).
+    """)
 
-if 'trained_model' in st.session_state and st.session_state.trained_model is not None:
-    model = st.session_state.trained_model
-    st.success("Model loaded from session state successfully!")
-else:
-    st.warning("No trained model found in session state. Please train a model first on the Model Training page.")
-    # Consider stopping the app or disabling prediction UI if no model is found
-    # st.stop() # You might want to stop or just disable prediction inputs
+    # --- Check if model and scaler are available in session state ---
+    if 'climate_model' not in st.session_state or st.session_state.climate_model is None:
+        st.error("❌ No trained climate model found. Please go to the 'Climate Analysis' -> 'Model Training' page and train a model first.")
+        return
 
-if 'trained_scaler' in st.session_state and st.session_state.trained_scaler is not None:
-    scaler = st.session_state.trained_scaler
-    st.success("Scaler loaded from session state successfully!")
-else:
-    st.warning("No trained scaler found in session state. Please train a model first on the Model Training page.")
-    # st.stop() # You might want to stop or just disable prediction inputs
+    if 'climate_scaler' not in st.session_state or st.session_state.climate_scaler is None:
+        st.error("❌ No fitted scaler found. Please train a model on the 'Model Training' page.")
+        return
 
-if 'model_features' in st.session_state and st.session_state.model_features is not None:
-    model_features = st.session_state.model_features
-    st.info(f"Expecting features: {', '.join(model_features)}")
-else:
-    st.warning("Model features not found in session state. Please train a model first.")
+    if 'climate_model_features' not in st.session_state or st.session_state.climate_model_features is None:
+        st.error("❌ Model feature list not found. Please train a model on the 'Model Training' page.")
+        return
+
+    model = st.session_state.climate_model
+    scaler = st.session_state.climate_scaler
+    model_features = st.session_state.climate_model_features
+
+    st.success("✅ Trained model, scaler, and feature list loaded from session state.")
+    st.info(f"Model Type: {type(model).__name__}")
+    st.info(f"Features expected by model: {model_features}")
 
 
-# Only show prediction UI if model and scaler are available
-if model and scaler and model_features:
-    st.subheader("Input Climate Data")
+    st.subheader("Input New Climate Data for Prediction")
 
-    # Input for different climate features - ensure these match your model's X.columns
-    # This is a critical point: The features you ask for here MUST match those your model was trained on
-    # and in the correct order.
-    # From your training script, X excludes 'DATE', 'YEAR', 'MONTH', 'T2M'.
-    # So, your input features should be the remaining ones.
-    # Let's assume your 'engineered_climate_data.csv' has columns like 'PRECTOT', 'RH2M', 'WS10M', etc.
-    # You also had 'DISTRICT' in the other person's code, but not in your original X.
-    # You need to be explicit about the features.
-
-    # Example: If your X.columns were ['PRECTOT', 'RH2M', 'WS10M']
-    # You might need to add inputs for 'YEAR', 'MONTH', 'LAT', 'LON' if they were in X.
-    # For now, let's use the ones from your original prediction code, assuming they map to your model_features
-
-    # --- Dynamically create input fields based on stored features ---
+    # --- Create input fields for each feature the model expects ---
+    # This part requires you to know what features your model was trained on.
+    # The 'climate_model_features' in session_state should help here.
     input_data = {}
-    st.write("Please provide values for the following features:")
+    st.write("Please enter values for the following features:")
 
-    # Map your previous explicit inputs to the stored model_features
-    # This part requires you to know what columns were in `X` during training.
-    # Based on your training script: X = climate_data.drop(columns=['DATE', 'YEAR', 'MONTH', 'T2M'])
-    # So, X would contain other numerical columns from your CSV.
-    # For example, if your engineered_climate_data.csv contained 'Temperature', 'Precipitation', 'Humidity', 'Wind_Speed'
-    # you'd need inputs for those.
-    # The 'DISTRICT' input is problematic unless you also have it as a feature and encoded it.
+    # Create dynamic inputs based on model_features
+    # You'll need to create appropriate input widgets for each type of feature
+    # For simplicity, let's assume most are numbers, but consider categories too.
 
-    # Let's re-align the prediction input based on likely features in your 'engineered_climate_data.csv'
-    # without 'DATE', 'YEAR', 'MONTH', 'T2M'
-    # Assuming 'PRECTOT', 'RH2M', 'WS10M' are actual features, you might also have others.
-    # We need to ensure the user inputs match the columns in `model_features`.
+    # Example: Create inputs for a few common features (adjust as per your actual features)
+    # You need to manually specify min/max/default values for these inputs.
+    # The order of inputs matters for consistency if you're building the DF manually.
 
-    # Example: Let's explicitly define inputs for features that were in X based on your training script
-    # This assumes your X columns were primarily 'PRECTOT', 'RH2M', 'WS10M' and possibly others like 'LAT', 'LON', 'ELEV' etc.
-    # If your original X had YEAR, MONTH as features, you need to add inputs for them.
-    # For now, I'll match the previous user_input structure but highlight the importance of feature consistency.
+    # Identify one-hot encoded district columns from model_features
+    district_cols = [f for f in model_features if f.startswith('DISTRICT_')]
+    other_numeric_features = [f for f in model_features if not f.startswith('DISTRICT_')]
 
-    # Dummy values for features that might be in your model but not directly input by user (e.g., engineered features)
-    # You need to create inputs for all features that your model was trained on!
-    # For demonstration, let's assume `model_features` are 'PRECTOT', 'RH2M', 'WS10M', etc.
-    # You had 'T2M' in your user_input DataFrame which is your *target*, this needs to be removed.
-    # The `user_input` DataFrame should contain only the features (columns of X).
+    # Categorical input for District (this will drive the one-hot encoding)
+    # You need to get the list of all possible districts from your original data.
+    # For now, let's assume you have a way to get them or hardcode some.
+    if 'climate_raw_data' in st.session_state and st.session_state.climate_raw_data is not None:
+        all_districts = st.session_state.climate_raw_data['DISTRICT'].unique().tolist()
+        if 'DISTRICT' in all_districts: # Remove 'DISTRICT' itself if it's there
+            all_districts.remove('DISTRICT') # Should not happen if FE is correct
+        all_districts.sort() # Sort for better display
+    else:
+        st.warning("Original climate data not found in session state to get full district list. Using a placeholder.")
+        # Fallback if original data is not there
+        all_districts = [col.replace('DISTRICT_', '') for col in district_cols]
+        if not all_districts: # If no district cols, provide a dummy
+             all_districts = ['Kathmandu', 'Lalitpur', 'Bhaktapur', 'Other']
 
-    # Example of how you might create inputs for some common features:
-    # (Adjust these based on what's truly in your `X` after dropping 'DATE', 'YEAR', 'MONTH', 'T2M')
-    # If you have 'LAT' and 'LON' as features:
-    # latitude = st.number_input("Latitude", min_value=-90.0, max_value=90.0, step=0.01)
-    # longitude = st.number_input("Longitude", min_value=-180.0, max_value=180.0, step=0.01)
-    # If you have 'YEAR' and 'MONTH' as features:
-    # year_input = st.number_input("Year", min_value=1900, max_value=2100, value=2023)
-    # month_input = st.number_input("Month", min_value=1, max_value=12, value=7)
 
-    # Let's stick to the previous inputs, but make sure they map to the *expected features*
-    # based on `model_features`.
-    # IMPORTANT: The column names in `user_input` DataFrame MUST match the `model_features` exactly.
-    # AND in the correct order for `scaler.transform` and `model.predict` when using numpy arrays.
-    # It's safer to create the DataFrame with specific columns from `model_features`.
+    selected_district = st.selectbox("District", all_districts)
 
-    # Let's retrieve actual features from `st.session_state.model_features`
-    input_values = {}
-    for feature in model_features:
-        if feature == 'PRECTOT':
-            input_values[feature] = st.number_input("Total Precipitation (mm)", min_value=0.0, max_value=500.0, step=0.1, key='pred_PRECTOT')
-        elif feature == 'RH2M':
-            input_values[feature] = st.number_input("Relative Humidity at 2m (%)", min_value=0.0, max_value=100.0, step=0.1, key='pred_RH2M')
-        elif feature == 'WS10M':
-            input_values[feature] = st.number_input("Wind Speed at 10m (m/s)", min_value=0.0, max_value=50.0, step=0.1, key='pred_WS10M')
-        # Add more features from your X if they exist:
-        elif feature == 'T2M_MAX':
-            input_values[feature] = st.number_input("Max Temp at 2m (°C)", min_value=-50.0, max_value=50.0, step=0.1, key='pred_T2M_MAX')
-        elif feature == 'T2M_MIN':
-            input_values[feature] = st.number_input("Min Temp at 2m (°C)", min_value=-50.0, max_value=50.0, step=0.1, key='pred_T2M_MIN')
-        elif feature == 'WS50M':
-            input_values[feature] = st.number_input("Wind Speed at 50m (m/s)", min_value=0.0, max_value=100.0, step=0.1, key='pred_WS50M')
-        elif feature == 'LAT':
-            input_values[feature] = st.number_input("Latitude", min_value=-90.0, max_value=90.0, step=0.01, key='pred_LAT')
-        elif feature == 'LON':
-            input_values[feature] = st.number_input("Longitude", min_value=-180.0, max_value=180.0, step=0.01, key='pred_LON')
-        elif feature == 'DISTRICT':
-            # This assumes 'DISTRICT' was label encoded. If not, you need to handle it.
-            # You'd need access to the original LabelEncoder for consistency.
-            # A simpler approach might be to use one-hot encoding during training if 'DISTRICT' is truly categorical.
-            # For now, if you're not using DISTRICT, you can remove it or map it.
-            # Let's assume you've decided to handle it as an input, but need to map it if label encoded.
-            # If 'DISTRICT' is in `model_features`, you need its encoded value.
-            # This is complex without the actual LabelEncoder from training.
-            # For simplicity, if DISTRICT is a feature, ensure it's either
-            # 1. Manually mapped to an int you know it means
-            # 2. Or, better, use OneHotEncoding during training and have inputs for each 'DISTRICT_X'
-            # For now, let's use a dummy numeric input for 'DISTRICT' if it's expected as a feature
-            input_values[feature] = st.number_input("District (encoded number)", min_value=0, max_value=100, value=0, key='pred_DISTRICT')
-        elif feature == 'YEAR': # If YEAR was a feature
-            input_values[feature] = st.number_input("Year", min_value=1900, max_value=2100, value=2023, key='pred_YEAR')
-        elif feature == 'MONTH': # If MONTH was a feature
-            input_values[feature] = st.number_input("Month", min_value=1, max_value=12, value=7, key='pred_MONTH')
-        else:
-            # Fallback for any other feature not explicitly listed
-            input_values[feature] = st.number_input(f"{feature}", key=f'pred_{feature}')
+    # For other numeric features, use number_input
+    for feature in other_numeric_features:
+        # Provide reasonable min/max/default values based on your data's scale
+        # This is crucial for realistic predictions and to prevent errors.
+        # These are just examples, you should use actual data ranges from your EDA
+        default_val = 0.0
+        min_val = -100.0
+        max_val = 100.0
+
+        # Try to infer better default/min/max from training data's descriptive stats
+        if 'engineered_climate_data' in st.session_state and st.session_state.engineered_climate_data is not None:
+            if feature in st.session_state.engineered_climate_data.columns:
+                series = st.session_state.engineered_climate_data[feature]
+                default_val = float(series.mean() if series.dtype != 'object' else 0.0)
+                min_val = float(series.min() if series.dtype != 'object' else -100.0)
+                max_val = float(series.max() if series.dtype != 'object' else 100.0)
+                # Adjust for scaled data, min/max might be around -3 to 3 after scaling
+                if "ANOMALY" in feature or "RANGE" in feature or "ROLLING_MEAN" in feature:
+                     # For scaled features, these are often good ranges to start
+                    min_val = -3.0
+                    max_val = 3.0
+                    default_val = 0.0 # Mean is often 0 after scaling
+
+        input_data[feature] = st.number_input(f"Enter value for {feature}",
+                                               value=float(default_val),
+                                               min_value=float(min_val),
+                                               max_value=float(max_val),
+                                               format="%.2f",
+                                               key=f"input_{feature}")
 
 
     if st.button("Predict Temperature"):
+        # Create a DataFrame for the single prediction
+        # Initialize with all features set to 0, then populate
+        input_df = pd.DataFrame(0.0, index=[0], columns=model_features)
+
+        # Populate numeric features
+        for feature, value in input_data.items():
+            if feature in input_df.columns: # Ensure feature exists in model's expected features
+                input_df[feature] = value
+
+        # Handle one-hot encoding for the selected district
+        district_one_hot_col = f'DISTRICT_{selected_district}'
+        if district_one_hot_col in input_df.columns:
+            input_df[district_one_hot_col] = 1.0 # Set the selected district column to 1
+        else:
+            st.warning(f"District column '{district_one_hot_col}' not found in model features. Check Feature Engineering.")
+            st.info(f"Available district columns in model features: {district_cols}")
+
+
+        # Ensure the order of columns matches the training order
         try:
-            # Create DataFrame ensuring column order matches model_features
-            user_input_df = pd.DataFrame([input_values])
-            # Ensure the order of columns matches the order used during training
-            user_input_df = user_input_df[model_features]
+            input_df = input_df[model_features] # Reorder columns to match model_features
+        except KeyError as e:
+            st.error(f"Error: Mismatch in input features and model's expected features. Missing: {e}")
+            st.info(f"Model expects: {model_features}")
+            st.info(f"Input has: {input_df.columns.tolist()}")
+            return
 
-            st.write("Input data for prediction:")
-            st.write(user_input_df)
 
-            # Scale the input
-            user_input_scaled = scaler.transform(user_input_df)
-
-            # Make prediction
-            predicted_temperature = model.predict(user_input_scaled)
-
-            # Display result
+        # Scale the input data using the *fitted scaler*
+        try:
+            scaled_input = scaler.transform(input_df)
+            prediction = model.predict(scaled_input)[0] # Predict and get the first (only) result
             st.subheader("Prediction Result")
-            st.success(f"Predicted Temperature: {predicted_temperature[0]:.2f} °C")
-
+            st.success(f"Predicted Temperature (T2M): **{prediction:.2f} °C**")
         except Exception as e:
-            st.error(f"Prediction failed: {e}")
-            st.write("Please check if the input features match the features the model was trained on.")
-            st.write(f"Expected features (from training): {model_features}")
+            st.error(f"An error occurred during prediction: {e}")
+            st.info("Please check the input values and ensure the model was trained correctly.")
 
-else:
-    st.info("Please go to the 'Climate Data Model Training' page and train a model first.")
+
+# This block is only executed when the script is run directly (for testing purposes)
+if __name__ == "__main__":
+    # Simulate session state for local testing if needed
+    if 'climate_model' not in st.session_state:
+        st.warning("Running Prediction page directly. No model/scaler/features in session state. Attempting to load dummy components.")
+        try:
+            from sklearn.ensemble import RandomForestRegressor
+            from sklearn.preprocessing import StandardScaler
+            # Create a dummy model, scaler, and features for testing
+            dummy_model = RandomForestRegressor(n_estimators=10, random_state=42)
+            dummy_scaler = StandardScaler()
+
+            # Define dummy features (these MUST match what your FE produces)
+            # Make sure these align with the 'other_numeric_features' and 'district_cols' logic above
+            dummy_features = ['T2M_ANOMALY', 'T2M_ROLLING_MEAN', 'PRECTOT_ANOMALY',
+                              'WS10M_RANGE', 'DAILY_TEMP_RANGE',
+                              'RH2M', 'WS10M', 'T2M_MAX', 'T2M_MIN', 'PRECTOT', # other base features
+                              'YEAR', 'MONTH'] # if YEAR/MONTH were included in features to model
+                              # Add dummy one-hot encoded districts
+            dummy_districts = ['DISTRICT_Lalitpur', 'DISTRICT_Bhaktapur']
+            dummy_features.extend(dummy_districts)
+
+            # Fit dummy scaler on some dummy data (e.g., random data with the same columns)
+            np.random.seed(42)
+            dummy_X = pd.DataFrame(np.random.rand(50, len(dummy_features)), columns=dummy_features)
+            # Ensure district columns are 0 or 1
+            for col in dummy_districts:
+                dummy_X[col] = np.random.randint(0, 2, 50)
+
+            dummy_scaler.fit(dummy_X)
+            dummy_model.fit(dummy_X, np.random.rand(50)) # Fit dummy model on dummy data
+
+            st.session_state.climate_model = dummy_model
+            st.session_state.climate_scaler = dummy_scaler
+            st.session_state.climate_model_features = dummy_features
+            st.session_state.climate_raw_data = pd.DataFrame({'DISTRICT': ['Kathmandu', 'Lalitpur']}) # For district list
+            st.info("Dummy model, scaler, and features loaded for direct testing.")
+        except Exception as e:
+            st.error(f"Could not create dummy components for direct testing: {e}")
+            st.session_state.climate_model = None # Ensure it's None if creation failed
+            st.session_state.climate_scaler = None
+            st.session_state.climate_model_features = None
+
+    display_prediction()
