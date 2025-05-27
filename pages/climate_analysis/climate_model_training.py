@@ -9,6 +9,7 @@ import seaborn as sns
 import joblib
 import time
 from sklearn.preprocessing import StandardScaler
+import os # Import os for path handling
 
 # Title and description for the model training page
 st.title("Climate Data Model Training")
@@ -19,11 +20,12 @@ st.markdown("""
 
 # Load the feature-engineered climate data
 climate_data_path = "data/climate_data/engineered_climate_data.csv"
+st.info(f"Attempting to load data from: `{climate_data_path}`")
 try:
     climate_data = pd.read_csv(climate_data_path)
-    st.success(f"Successfully loaded data from {climate_data_path}")
+    st.success(f"Successfully loaded data from `{climate_data_path}`")
 except FileNotFoundError:
-    st.error(f"Error: The file '{climate_data_path}' was not found. Please ensure it exists.")
+    st.error(f"Error: The file '{climate_data_path}' was not found. Please ensure it exists in the correct 'data/climate_data/' directory relative to your app.py.")
     st.stop() # Stop the app if data is not found
 except Exception as e:
     st.error(f"An error occurred while loading the data: {e}")
@@ -33,60 +35,109 @@ except Exception as e:
 st.subheader("Feature-Engineered Data Overview (Raw)")
 st.write(climate_data.head())
 st.write(f"Initial shape: {climate_data.shape}")
-
+st.write(f"Initial columns: {climate_data.columns.tolist()}")
 
 # Preprocessing steps
 st.subheader("Data Preprocessing")
 
-# Convert all relevant columns to numeric, coercing errors
-# Exclude 'DATE' from this conversion if it's truly a datetime string
-numeric_cols = [col for col in climate_data.columns if col not in ['DATE']]
-for col in numeric_cols:
-    climate_data[col] = pd.to_numeric(climate_data[col], errors='coerce')
+# Identify non-numeric columns before coercion
+non_numeric_before_coercion = climate_data.select_dtypes(include=['object', 'string']).columns.tolist()
+if non_numeric_before_coercion:
+    st.info(f"Columns detected as non-numeric before coercion: {non_numeric_before_coercion}")
+else:
+    st.info("No non-numeric columns detected before explicit coercion (good sign).")
+
+
+# Convert all columns (except 'DATE') to numeric, coercing errors
+# Assume 'DATE' is a string/datetime and should not be converted to numeric directly for features
+cols_to_convert_to_numeric = [col for col in climate_data.columns if col not in ['DATE']]
+st.info(f"Attempting to convert these columns to numeric: {cols_to_convert_to_numeric}")
+
+for col in cols_to_convert_to_numeric:
+    # We use .copy() to avoid SettingWithCopyWarning if climate_data is a slice
+    climate_data.loc[:, col] = pd.to_numeric(climate_data[col], errors='coerce')
+
+st.info("Finished numeric coercion. Checking for new NaNs introduced by coercion.")
 
 # Check for missing values after initial load and coercion
-missing_values_initial = climate_data.isnull().sum()
-if missing_values_initial.any():
-    st.warning(f"Missing values detected in the dataset before dropping:\n{missing_values_initial[missing_values_initial > 0]}")
+missing_values_after_coercion = climate_data.isnull().sum()
+missing_values_after_coercion_report = missing_values_after_coercion[missing_values_after_coercion > 0]
+if not missing_values_after_coercion_report.empty:
+    st.warning(f"Missing values detected after numeric coercion (these will be dropped):\n{missing_values_after_coercion_report}")
+else:
+    st.success("No new missing values introduced by numeric coercion.")
 
 # Handle missing values: Drop rows with any missing values
 original_rows = climate_data.shape[0]
-climate_data = climate_data.dropna()
-rows_after_dropna = climate_data.shape[0]
+climate_data_cleaned = climate_data.dropna().copy() # Use .copy() to ensure it's a new DataFrame
+rows_after_dropna = climate_data_cleaned.shape[0]
+
 if original_rows > rows_after_dropna:
     st.info(f"Dropped {original_rows - rows_after_dropna} rows with missing values.")
 else:
     st.success("No missing values were dropped (or none found after coercion).")
 
-st.write(f"Shape after dropping NaNs: {climate_data.shape}")
+st.write(f"Shape after dropping NaNs: {climate_data_cleaned.shape}")
 
 # Define features (X) and target (y)
 # Ensure 'DATE', 'YEAR', 'MONTH', 'T2M' are indeed column names in your CSV
-columns_to_drop = ['DATE', 'YEAR', 'MONTH', 'T2M']
-# Filter out columns that don't exist in the dataframe
-existing_columns_to_drop = [col for col in columns_to_drop if col in climate_data.columns]
-X = climate_data.drop(columns=existing_columns_to_drop)
-y = climate_data['T2M']
+columns_to_exclude = ['DATE', 'YEAR', 'MONTH', 'T2M']
+# Filter out columns that don't exist in the dataframe before attempting to drop
+existing_columns_to_exclude = [col for col in columns_to_exclude if col in climate_data_cleaned.columns]
 
-# Check if there are missing values after handling them (should be none now)
-if X.isnull().sum().any() or y.isnull().sum().any():
-    st.error("Error: There are still missing values in the data. Please handle them before training.")
-    st.stop() # Stop if critical data is missing
-else:
-    st.success("No missing values in the dataset.")
+st.info(f"Columns to exclude from features (X): {existing_columns_to_exclude}")
+st.info(f"All columns in cleaned data: {climate_data_cleaned.columns.tolist()}")
 
-# Display data types and a sample of X and y
-st.subheader("Final Data Overview for Training")
-st.write("Features (X) head:")
-st.write(X.head())
-st.write("Target (y) head:")
-st.write(y.head())
+try:
+    X = climate_data_cleaned.drop(columns=existing_columns_to_exclude)
+    # Ensure T2M exists and is numeric for the target
+    if 'T2M' in climate_data_cleaned.columns:
+        y = climate_data_cleaned['T2M']
+    else:
+        st.error("Error: 'T2M' (target column) not found in the cleaned data. Please check your CSV.")
+        st.stop()
+except KeyError as e:
+    st.error(f"Error dropping columns or selecting target: {e}. One of the columns to exclude might not exist after cleaning.")
+    st.stop()
 
-st.subheader("Data Types of Features (X):")
+
+# Final check for missing values and data types in X and y *before* splitting
+st.subheader("Pre-Training Data Validation (X and y)")
+
+# Check if there are missing values in X or y
+if X.isnull().sum().any():
+    st.error("Error: Missing values found in features (X) AFTER final cleaning. Please review preprocessing.")
+    st.write(X.isnull().sum()[X.isnull().sum() > 0])
+    st.stop()
+if y.isnull().sum().any():
+    st.error("Error: Missing values found in target (y) AFTER final cleaning. Please review preprocessing.")
+    st.write(y.isnull().sum())
+    st.stop()
+st.success("No missing values in X or y.")
+
+# Check data types for X and y
+st.write("Data Types of Features (X):")
 st.write(X.dtypes)
+non_numeric_in_X = X.select_dtypes(exclude=['number']).columns.tolist()
+if non_numeric_in_X:
+    st.error(f"Error: Non-numeric columns still present in features (X): {non_numeric_in_X}")
+    st.stop()
+else:
+    st.success("All features (X) are numeric.")
 
-st.subheader("Data Type of Target (y):")
+st.write("Data Type of Target (y):")
 st.write(y.dtype)
+if not pd.api.types.is_numeric_dtype(y):
+    st.error(f"Error: Target (y) is not numeric. Its type is: {y.dtype}")
+    st.stop()
+else:
+    st.success("Target (y) is numeric.")
+
+# Display a sample of X and y right before splitting
+st.write("Sample of X (features) before splitting:")
+st.write(X.head())
+st.write("Sample of y (target) before splitting:")
+st.write(y.head())
 
 # Split the data into training and testing sets
 try:
@@ -95,7 +146,6 @@ try:
 except Exception as e:
     st.error(f"Error splitting data: {e}")
     st.stop()
-
 
 # Model selection dropdown
 model_choice = st.selectbox(
@@ -115,19 +165,25 @@ if st.button('Train Model'):
 
     # Initialize the selected model
     if model_choice == "Random Forest":
-        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1) # Increased n_estimators
+        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
     elif model_choice == "Gradient Boosting":
         model = GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
     elif model_choice == "Linear Regression":
         model = LinearRegression()
 
     st.info(f"Starting training for {model_choice} model...")
+    st.info(f"Shape of X_train: {X_train.shape}")
+    st.info(f"Shape of y_train: {y_train.shape}")
+    st.info(f"Data types of X_train columns immediately before fit:\n{X_train.dtypes}")
+
+
     try:
         # Actual model training (fitting the model)
         model.fit(X_train, y_train)
         st.success(f"{model_choice} model trained successfully!")
     except Exception as e:
-        st.error(f"Error during model training for {model_choice}: {e}")
+        st.error(f"**CRITICAL ERROR DURING MODEL TRAINING!** The error is: {e}")
+        st.error("Please examine the data types and missing values reported above.")
         st.stop() # Stop if training fails
 
     # Continue progress bar to 100%
@@ -175,10 +231,8 @@ if st.button('Train Model'):
         else:
             st.info("Feature importances are not available for the selected model type.")
 
-
     # Save the trained model and scaler
     model_dir = "models"
-    import os
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
@@ -201,7 +255,6 @@ if st.button('Train Model'):
         st.success(f"Scaler saved to {scaler_path}")
     except Exception as e:
         st.error(f"Error saving scaler: {e}")
-
 
     # Display model's performance summary
     st.markdown("""
