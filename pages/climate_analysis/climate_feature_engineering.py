@@ -43,16 +43,10 @@ climate_data[['T2M', 'PRECTOT', 'T2M_ANOMALY', 'T2M_ROLLING_MEAN', 'PRECTOT_ANOM
     climate_data[['T2M', 'PRECTOT', 'T2M_ANOMALY', 'T2M_ROLLING_MEAN', 'PRECTOT_ANOMALY', 'WS10M_RANGE']]
 )
 
+# Save the feature-engineered data
+engineered_data_path = "data/climate_data/engineered_climate_data.csv"
+climate_data.to_csv(engineered_data_path, index=False)
+
 # Display the feature-engineered data
 st.subheader("Feature-Engineered Data")
 st.write(climate_data.head())
-
-# Optionally, split data into training and testing sets for further use
-X = climate_data.drop(columns=['DATE', 'YEAR', 'MONTH'])
-y = climate_data['T2M']  # Predicting temperature as an example
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-st.subheader("Training and Testing Split")
-st.write(f"Training set size: {X_train.shape[0]}")
-st.write(f"Testing set size: {X_test.shape[0]}")
