@@ -4,3 +4,4 @@ numpy==1.23.5
 matplotlib==3.6.2
 seaborn==0.11.2
 scikit-learn>=1.2.0
+altair==4.2.0
