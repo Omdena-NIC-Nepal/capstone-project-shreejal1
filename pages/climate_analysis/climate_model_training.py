@@ -1,4 +1,5 @@
 import streamlit as st
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
@@ -83,7 +84,7 @@ if st.button('Train Model'):
 
     # Model evaluation: RMSE and R² score
     # Fix: Correct usage of mean_squared_error with squared=False for RMSE
-    rmse = mean_squared_error(y_test, y_pred, squared=False)  # Corrected the usage
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))  # Corrected the usage
     r2 = r2_score(y_test, y_pred)
 
     # Display evaluation metrics
