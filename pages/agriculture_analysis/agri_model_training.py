@@ -1,48 +1,41 @@
 import streamlit as st
 from sklearn.preprocessing import LabelEncoder
-from scripts.model_train import train_model
-from scripts.visualization import plot_actual_vs_predicted, plot_residuals
+from scripts.model_train import train_model  # Ensure this function is properly imported
+from scripts.visualization import plot_actual_vs_predicted, plot_residuals  # Ensure these functions are available
 import pandas as pd
 
 def display():
     st.write("""
-        # Model Training - Climate Data
+        # Model Training - Agriculture & Rural Development Data
     """)
 
-    # Check if the cleaned dataset exists
-    if "cleaned_climatedf" in st.session_state:
-        cleaned_climatedf = st.session_state.cleaned_climatedf
-    else:
-        st.error("❌ Data not loaded. Please go to the overview and load the data again.")
-        return
+    # Load the agricultural data if not already in session state
+    if "agriculture_df" not in st.session_state:
+        st.warning("❌ Data not loaded. Please go to the overview and load the data again.")
+        return  # Exit function if data isn't loaded
 
-    # Handle categorical data: Label encode 'DISTRICT' if present
-    if 'DISTRICT' in cleaned_climatedf.columns:
+    # If the data is loaded into session state
+    agriculture_df = st.session_state.agriculture_df
+
+    # Since the country is always Nepal, no need to encode 'Country Name'
+    if 'Country Name' in agriculture_df.columns:
+        agriculture_df = agriculture_df.drop(columns=['Country Name'])  # Drop 'Country Name' from features
+        st.success("Dropped 'Country Name' column as it is constant (Nepal).")
+
+    # Handle categorical data: Label encode 'Indicator Name' if present
+    if 'Indicator Name' in agriculture_df.columns:
         label_encoder = LabelEncoder()
-        cleaned_climatedf['DISTRICT'] = label_encoder.fit_transform(cleaned_climatedf['DISTRICT'])
-        st.success("Encoded 'DISTRICT' column into numerical values.")
+        agriculture_df['Indicator Name'] = label_encoder.fit_transform(agriculture_df['Indicator Name'])
+        st.success("Encoded 'Indicator Name' column into numerical values.")
     else:
-        st.warning("'DISTRICT' column not found in the data.")
+        st.warning("'Indicator Name' column not found in the data.")
 
-    # Define feature columns and target columns
-    feature_cols = ['YEAR', 'MONTH', 'DISTRICT', 'LAT', 'LON']
-    target_cols = [
-        'PRECTOT',    # Total Precipitation
-        'RH2M',       # Relative Humidity at 2m
-        'T2M',        # Air Temperature at 2m
-        'T2MWET',     # Wet Bulb Temperature at 2m
-        'T2M_MAX',    # Maximum Air Temperature at 2m
-        'T2M_MIN',    # Minimum Air Temperature at 2m
-        'WS10M',      # Wind Speed at 10m
-        'WS10M_MAX',  # Maximum Wind Speed at 10m
-        'WS10M_MIN',  # Minimum Wind Speed at 10m
-        'WS50M',      # Wind Speed at 50m
-        'WS50M_MAX',  # Maximum Wind Speed at 50m
-        'WS50M_MIN'   # Minimum Wind Speed at 50m
-    ]
+    # Define feature columns and target column
+    feature_cols = ['Year', 'Indicator Name']  # Country Name is dropped
+    target_col = ['Value']  # Target is the 'Value' of the indicator
 
     # Check if all the necessary columns are in the DataFrame
-    missing_columns = [col for col in feature_cols + target_cols if col not in cleaned_climatedf.columns]
+    missing_columns = [col for col in feature_cols + target_col if col not in agriculture_df.columns]
     if missing_columns:
         st.error(f"❌ Missing columns: {', '.join(missing_columns)}")
         return
@@ -63,7 +56,7 @@ def display():
         with st.spinner('🚀 Training model. Please wait...'):
             try:
                 # Train the model using the selected parameters
-                model, metrics = train_model(cleaned_climatedf, model_choice, split, feature_cols, target_cols)
+                model, metrics = train_model(agriculture_df, model_choice, split, feature_cols, target_col)
             except Exception as e:
                 st.error(f"An error occurred while training the model: {e}")
                 return
@@ -85,6 +78,7 @@ def display():
 
         # Save the trained model in session state
         st.session_state.trained_model = model
+
 
         # Extract true and predicted values for plotting
         y_true = metrics['y_true']
