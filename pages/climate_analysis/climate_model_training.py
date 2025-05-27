@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 import time
+from sklearn.preprocessing import StandardScaler
 
 # Title and description for the model training page
 st.title("Climate Data Model Training")
@@ -24,9 +25,23 @@ climate_data = pd.read_csv(climate_data_path)
 st.subheader("Feature-Engineered Data Overview")
 st.write(climate_data.head())
 
+# Check for missing values
+missing_values = climate_data.isnull().sum()
+if missing_values.any():
+    st.warning(f"Missing values detected in the dataset:\n{missing_values}")
+
+# Handle missing values: Drop rows with any missing values (alternatively, you can impute missing values)
+climate_data = climate_data.dropna()  # This will drop rows with any NaN values
+
 # Define features (X) and target (y)
 X = climate_data.drop(columns=['DATE', 'YEAR', 'MONTH', 'T2M'])  # Exclude T2M as it's the target
 y = climate_data['T2M']
+
+# Check if there are missing values after handling them
+if X.isnull().sum().any() or y.isnull().sum():
+    st.error("There are still missing values in the data. Please handle them before training.")
+else:
+    st.success("No missing values in the dataset.")
 
 # Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -107,7 +122,6 @@ if st.button('Train Model'):
     joblib.dump(model, model_path)
 
     # Save the scaler
-    from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     joblib.dump(scaler, scaler_path)
