@@ -49,20 +49,19 @@ if st.button('Train Model'):
 
     # Initialize the selected model
     if model_choice == "Random Forest":
-        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+        model = RandomForestRegressor(n_estimators=10, max_depth=10, random_state=42, n_jobs=-1)
     elif model_choice == "Gradient Boosting":
         model = GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
     elif model_choice == "Linear Regression":
         model = LinearRegression()
 
-    # Actual model training
+    # Actual model training (fitting the model)
     model.fit(X_train, y_train)
 
     # Continue progress bar to 100%
     for i in range(50, 100):
         time.sleep(0.01)
         progress_bar.progress(i + 1)
-
 
     # Make predictions after training
     y_pred = model.predict(X_test)
@@ -106,6 +105,7 @@ if st.button('Train Model'):
 
     # Save the trained model using joblib
     joblib.dump(model, model_path)
+
     # Save the scaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
