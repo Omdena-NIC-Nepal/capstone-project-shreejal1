@@ -58,7 +58,7 @@ page_functions = {
         "EDA": climate_eda.display,
         "Feature Engineering": climate_feature_engineering.display_feature_engineering,
         "Model Training": climate_model_training.display_model_training,
-        "Prediction": climate_prediction.display_prediction
+        "Prediction": climate_prediction.display
     },
     "Agriculture Analysis": {
         "Overview": agriculture_overview.display, # UPDATED
