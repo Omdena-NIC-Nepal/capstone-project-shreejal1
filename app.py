@@ -36,7 +36,7 @@ if 'climate_scaler' not in st.session_state: # Stores the fitted scaler object
 if 'climate_model_features' not in st.session_state: # Stores the list of feature column names
     st.session_state.climate_model_features = None
 
-# For Agriculture Analysis (add similar initializations for agri data)
+# For Agriculture Analysis
 if 'agriculture_raw_data' not in st.session_state:
     st.session_state.agriculture_raw_data = None
 if 'engineered_agriculture_data' not in st.session_state:
