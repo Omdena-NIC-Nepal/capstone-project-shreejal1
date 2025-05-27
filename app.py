@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd # Import pandas if your session state initializations use it
 
-# --- Import your page scripts as modules ---
-# Assuming your pages are in a 'pages/climate_analysis/' and 'pages/agriculture_analysis/' structure
+# --- Import your climate analysis page scripts as modules ---
 from pages.climate_analysis import climate_overview, climate_eda, climate_feature_engineering, climate_model_training, climate_prediction
-# from pages.agriculture_analysis import agri_overview, agri_eda, agri_feature_engineering, agri_model_training, agri_prediction
+
+# --- Import your agriculture analysis page scripts as modules ---
+# ADD THESE LINES:
+from pages.agriculture_analysis import agri_overview, agri_eda, agri_feature_engineering, agri_model_training, agri_prediction
+
 
 # Configure page settings
 st.set_page_config(layout="wide", page_title="Climate Change Impact Assessment and Prediction System for Nepal")
@@ -19,7 +22,6 @@ st.markdown("""
 
 # --- Initialize session state variables ---
 # Initialize all necessary session state keys at the very beginning of app.py
-# This ensures they are always present and avoids KeyError when pages try to access them.
 
 # For Climate Analysis
 if 'climate_raw_data' not in st.session_state:
@@ -53,15 +55,15 @@ page_functions = {
     "Climate Analysis": {
         "Overview": climate_overview.display,
         "EDA": climate_eda.display,
-        "Feature Engineering": climate_feature_engineering.display_feature_engineering, # Use the new function name
-        "Model Training": climate_model_training.display_model_training, # You'll need to define this in your training page
-        "Prediction": climate_prediction.display_prediction # You'll need to define this in your prediction page
+        "Feature Engineering": climate_feature_engineering.display_feature_engineering,
+        "Model Training": climate_model_training.display_model_training,
+        "Prediction": climate_prediction.display_prediction
     },
     "Agriculture Analysis": {
         "Overview": agri_overview.display,
         "EDA": agri_eda.display,
-        "Feature Engineering": agri_feature_engineering.display,
-        "Model Training": agri_model_training.display,
+        "Feature Engineering": agri_feature_engineering.display, # Assuming these agri pages use a 'display' function
+        "Model Training": agri_model_training.display,           # Adjust if they use different names like 'display_agri_training'
         "Prediction": agri_prediction.display
     }
 }
@@ -71,6 +73,5 @@ selected_section = st.sidebar.radio("Select Section", list(page_functions.keys()
 selected_page_name = st.sidebar.radio("Select Page", list(page_functions[selected_section].keys()))
 
 # --- Call the selected page's display function ---
-# This is the key change from `exec(code)`
 page_function = page_functions[selected_section][selected_page_name]
 page_function() # Call the function that runs the page's content
